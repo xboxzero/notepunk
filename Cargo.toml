@@ -8,9 +8,11 @@ description = "NotePunk — beat-generation punk note capture"
 leptos = { version = "0.7", features = ["csr"] }
 console_error_panic_hook = "0.1"
 wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+gloo-net = { version = "0.6", default-features = false, features = ["http", "json"] }
 web-sys = { version = "0.3", features = [
     "Window",
     "Document",
@@ -22,6 +24,14 @@ web-sys = { version = "0.3", features = [
     "HtmlTextAreaElement",
     "Blob",
     "Url",
+    "MediaDevices",
+    "MediaRecorder",
+    "MediaRecorderOptions",
+    "MediaStream",
+    "MediaStreamConstraints",
+    "Navigator",
+    "BlobEvent",
+    "Event",
 ] }
 
 [profile.release]

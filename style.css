@@ -273,6 +273,83 @@ body {
     margin-bottom: 0.5rem;
 }
 
+.image-search {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--smudge);
+}
+
+.image-search-bar {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.image-search-input {
+    flex: 1;
+    background: transparent;
+    border: 2px solid var(--ink);
+    padding: 0.5rem 0.75rem;
+    font-family: inherit;
+    font-size: 0.9rem;
+    color: var(--ink);
+    outline: none;
+}
+
+.image-search-input:focus {
+    border-color: var(--red-stamp);
+}
+
+.image-search-input::placeholder {
+    color: rgba(26, 22, 18, 0.4);
+}
+
+.image-search-bar button {
+    background: var(--ink);
+    color: var(--paper);
+    border: 2px solid var(--ink);
+    padding: 0.5rem 1.25rem;
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    text-transform: lowercase;
+    letter-spacing: 0.1em;
+    transition: all 0.1s;
+}
+
+.image-search-bar button:hover {
+    background: var(--red-stamp);
+    border-color: var(--red-stamp);
+}
+
+.image-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.image-grid img {
+    width: 100%;
+    height: 100px;
+    object-fit: cover;
+    cursor: pointer;
+    border: 2px solid var(--ink);
+    background: var(--smudge);
+    transition: all 0.1s;
+}
+
+.image-grid img:hover {
+    border-color: var(--red-stamp);
+    transform: scale(1.03);
+}
+
+.error-msg {
+    color: var(--red-stamp);
+    font-style: italic;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+}
+
 .graph-frame {
     margin-top: 0.5rem;
 }

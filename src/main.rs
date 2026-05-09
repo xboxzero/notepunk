@@ -114,6 +114,75 @@ fn download_markdown(note: &Note) {
     let _ = web_sys::Url::revoke_object_url(&url);
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct ImageHit {
+    title: String,
+    thumb_url: String,
+    full_url: String,
+}
+
+async fn search_commons(query: &str) -> Result<Vec<ImageHit>, String> {
+    let encoded = js_sys::encode_uri_component(query)
+        .as_string()
+        .ok_or_else(|| "encoding failed".to_string())?;
+    let url = format!(
+        "https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*\
+         &generator=search&gsrsearch={}&gsrnamespace=6&gsrlimit=24\
+         &prop=imageinfo&iiprop=url%7Csize%7Cmime&iiurlwidth=240",
+        encoded
+    );
+    let resp = gloo_net::http::Request::get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("network error: {}", e))?;
+    let json: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("bad json: {}", e))?;
+
+    let pages = json
+        .get("query")
+        .and_then(|q| q.get("pages"))
+        .and_then(|p| p.as_object());
+    let Some(pages) = pages else { return Ok(Vec::new()) };
+
+    let mut items = Vec::new();
+    for (_, page) in pages {
+        let title = page
+            .get("title")
+            .and_then(|t| t.as_str())
+            .and_then(|s| s.strip_prefix("File:"))
+            .unwrap_or("")
+            .to_string();
+        let info = page.get("imageinfo").and_then(|a| a.get(0));
+        let Some(info) = info else { continue };
+        let mime = info.get("mime").and_then(|m| m.as_str()).unwrap_or("");
+        if !mime.starts_with("image/") || mime == "image/svg+xml" {
+            continue;
+        }
+        let thumb_url = info
+            .get("thumburl")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string();
+        let full_url = info
+            .get("url")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string();
+        if thumb_url.is_empty() || full_url.is_empty() || title.is_empty() {
+            continue;
+        }
+        items.push(ImageHit {
+            title,
+            thumb_url,
+            full_url,
+        });
+    }
+
+    Ok(items)
+}
+
 fn extract_wikilinks(body: &str) -> Vec<String> {
     let mut links = Vec::new();
     let bytes = body.as_bytes();
@@ -356,6 +425,42 @@ fn App() -> impl IntoView {
         });
     };
 
+    let (img_query, set_img_query) = signal(String::new());
+    let (img_results, set_img_results) = signal(Vec::<ImageHit>::new());
+    let (img_loading, set_img_loading) = signal(false);
+    let (img_err, set_img_err) = signal(Option::<String>::None);
+
+    let trigger_image_search = move || {
+        let q = img_query.get_untracked();
+        if q.trim().is_empty() {
+            return;
+        }
+        set_img_loading.set(true);
+        set_img_err.set(None);
+        set_img_results.set(Vec::new());
+        wasm_bindgen_futures::spawn_local(async move {
+            match search_commons(&q).await {
+                Ok(items) => set_img_results.set(items),
+                Err(e) => set_img_err.set(Some(e)),
+            }
+            set_img_loading.set(false);
+        });
+    };
+
+    let insert_image = move |title: String, url: String| {
+        let Some(id) = current_id.get_untracked() else { return };
+        set_notes.update(|v| {
+            if let Some(n) = v.iter_mut().find(|n| n.id == id) {
+                let snippet = format!("\n![{}]({})\n", title, url);
+                if !n.body.is_empty() && !n.body.ends_with('\n') {
+                    n.body.push('\n');
+                }
+                n.body.push_str(&snippet);
+                n.updated_at = js_sys::Date::now();
+            }
+        });
+    };
+
     view! {
         <main class="page">
             <header class="masthead">
@@ -431,6 +536,55 @@ fn App() -> impl IntoView {
                                             <button class="danger" on:click=delete_current>
                                                 "delete"
                                             </button>
+                                        </div>
+                                        <div class="image-search">
+                                            <div class="image-search-bar">
+                                                <input
+                                                    class="image-search-input"
+                                                    type="text"
+                                                    placeholder="// search wikimedia commons for images //"
+                                                    prop:value=move || img_query.get()
+                                                    on:input=move |ev| set_img_query.set(event_target_value(&ev))
+                                                    on:keydown=move |ev: ev::KeyboardEvent| {
+                                                        if ev.key() == "Enter" {
+                                                            ev.prevent_default();
+                                                            trigger_image_search();
+                                                        }
+                                                    }
+                                                />
+                                                <button on:click=move |_| trigger_image_search()>
+                                                    "search"
+                                                </button>
+                                            </div>
+                                            {move || if img_loading.get() {
+                                                view! { <p class="dim">"// searching commons //"</p> }.into_any()
+                                            } else if let Some(e) = img_err.get() {
+                                                view! { <p class="error-msg">{e}</p> }.into_any()
+                                            } else {
+                                                view! { <span></span> }.into_any()
+                                            }}
+                                            <div class="image-grid">
+                                                <For
+                                                    each=move || img_results.get()
+                                                    key=|r| r.full_url.clone()
+                                                    children=move |r: ImageHit| {
+                                                        let title = r.title.clone();
+                                                        let url = r.full_url.clone();
+                                                        let alt = r.title.clone();
+                                                        let tooltip = r.title.clone();
+                                                        view! {
+                                                            <img
+                                                                src=r.thumb_url.clone()
+                                                                alt=alt
+                                                                title=tooltip
+                                                                on:click=move |_| {
+                                                                    insert_image(title.clone(), url.clone())
+                                                                }
+                                                            />
+                                                        }
+                                                    }
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 }
