@@ -1,0 +1,86 @@
+:root {
+    --paper: #f4ead5;
+    --ink: #1a1612;
+    --red-stamp: #b8442a;
+    --blue-pen: #2a4d8f;
+    --smudge: rgba(26, 22, 18, 0.15);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Courier Prime', 'Courier New', monospace;
+    font-size: 18px;
+    line-height: 1.5;
+    min-height: 100vh;
+}
+
+body {
+    background-image:
+        radial-gradient(circle at 20% 30%, rgba(0,0,0,0.04) 1px, transparent 1px),
+        radial-gradient(circle at 80% 70%, rgba(0,0,0,0.03) 1px, transparent 1px);
+    background-size: 40px 40px, 60px 60px;
+}
+
+.page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 4rem 2rem;
+}
+
+.masthead {
+    border-bottom: 3px double var(--ink);
+    padding-bottom: 1.5rem;
+    margin-bottom: 3rem;
+    position: relative;
+}
+
+.masthead::before {
+    content: "// NOTEPUNK //";
+    position: absolute;
+    top: -1.2rem;
+    left: 0;
+    background: var(--paper);
+    padding: 0 0.5rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    color: var(--red-stamp);
+}
+
+.title {
+    font-family: 'Special Elite', 'Courier Prime', monospace;
+    font-size: 4rem;
+    font-weight: 400;
+    letter-spacing: -0.03em;
+    text-transform: uppercase;
+    color: var(--ink);
+    text-shadow: 2px 2px 0 var(--red-stamp);
+    line-height: 1;
+}
+
+.tagline {
+    margin-top: 1rem;
+    font-style: italic;
+    color: var(--blue-pen);
+    font-size: 1rem;
+}
+
+.placeholder p {
+    margin-bottom: 1rem;
+}
+
+.dim {
+    color: rgba(26, 22, 18, 0.5);
+    font-size: 0.85rem;
+}
+
+::selection {
+    background: var(--red-stamp);
+    color: var(--paper);
+}
