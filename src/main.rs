@@ -2,6 +2,9 @@ use leptos::ev;
 use leptos::mount::mount_to_body;
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::rc::Rc;
+use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{window, HtmlAnchorElement};
 
@@ -111,6 +114,156 @@ fn download_markdown(note: &Note) {
     let _ = web_sys::Url::revoke_object_url(&url);
 }
 
+fn extract_wikilinks(body: &str) -> Vec<String> {
+    let mut links = Vec::new();
+    let bytes = body.as_bytes();
+    let mut i = 0;
+    while i + 1 < bytes.len() {
+        if bytes[i] == b'[' && bytes[i + 1] == b'[' {
+            let start = i + 2;
+            let mut j = start;
+            let mut closed = false;
+            while j + 1 < bytes.len() {
+                if bytes[j] == b']' && bytes[j + 1] == b']' {
+                    if let Ok(s) = std::str::from_utf8(&bytes[start..j]) {
+                        let trimmed = s.trim();
+                        if !trimmed.is_empty() {
+                            links.push(trimmed.to_string());
+                        }
+                    }
+                    i = j + 2;
+                    closed = true;
+                    break;
+                }
+                j += 1;
+            }
+            if !closed {
+                break;
+            }
+        } else {
+            i += 1;
+        }
+    }
+    links
+}
+
+#[derive(Serialize)]
+struct GraphNode<'a> {
+    id: &'a str,
+    label: String,
+}
+
+#[derive(Serialize)]
+struct GraphEdge {
+    id: String,
+    source: String,
+    target: String,
+}
+
+fn build_graph_payload(notes: &[Note]) -> (String, String) {
+    let title_to_id: HashMap<String, &str> = notes
+        .iter()
+        .map(|n| (n.display_title().to_lowercase(), n.id.as_str()))
+        .collect();
+
+    let nodes: Vec<GraphNode> = notes
+        .iter()
+        .map(|n| GraphNode {
+            id: &n.id,
+            label: n.display_title(),
+        })
+        .collect();
+
+    let mut edges = Vec::new();
+    let mut idx: u64 = 0;
+    for n in notes {
+        for link in extract_wikilinks(&n.body) {
+            if let Some(target_id) = title_to_id.get(&link.to_lowercase()) {
+                if *target_id != n.id.as_str() {
+                    edges.push(GraphEdge {
+                        id: format!("e{}", idx),
+                        source: n.id.clone(),
+                        target: target_id.to_string(),
+                    });
+                    idx += 1;
+                }
+            }
+        }
+    }
+
+    (
+        serde_json::to_string(&nodes).unwrap_or_else(|_| "[]".into()),
+        serde_json::to_string(&edges).unwrap_or_else(|_| "[]".into()),
+    )
+}
+
+#[wasm_bindgen(inline_js = r#"
+export function renderGraph(containerId, nodesJson, edgesJson, onClick) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+    if (!window.cytoscape) {
+        container.textContent = '// cytoscape failed to load — check your connection //';
+        container.style.color = '#b8442a';
+        container.style.padding = '2rem';
+        container.style.fontFamily = 'Courier Prime, monospace';
+        return;
+    }
+    const nodes = JSON.parse(nodesJson).map(n => ({ data: { id: n.id, label: n.label } }));
+    const edges = JSON.parse(edgesJson).map(e => ({ data: { id: e.id, source: e.source, target: e.target } }));
+    const cy = window.cytoscape({
+        container,
+        elements: { nodes, edges },
+        style: [
+            { selector: 'node', style: {
+                'background-color': '#b8442a',
+                'border-color': '#1a1612',
+                'border-width': 2,
+                'label': 'data(label)',
+                'color': '#1a1612',
+                'font-family': 'Special Elite, Courier Prime, monospace',
+                'font-size': 13,
+                'text-margin-y': -10,
+                'text-valign': 'top',
+                'text-halign': 'center',
+                'width': 30, 'height': 30
+            }},
+            { selector: 'node:selected', style: {
+                'background-color': '#1a1612',
+                'border-color': '#b8442a'
+            }},
+            { selector: 'edge', style: {
+                'width': 1.5,
+                'line-color': '#1a1612',
+                'curve-style': 'bezier',
+                'opacity': 0.55,
+                'target-arrow-color': '#1a1612',
+                'target-arrow-shape': 'triangle',
+                'arrow-scale': 0.8
+            }}
+        ],
+        layout: { name: 'cose', animate: false, padding: 30, idealEdgeLength: 110 },
+        wheelSensitivity: 0.2
+    });
+    cy.on('tap', 'node', (evt) => onClick(evt.target.id()));
+}
+"#)]
+extern "C" {
+    #[wasm_bindgen(js_name = renderGraph)]
+    fn render_graph(
+        container_id: &str,
+        nodes_json: &str,
+        edges_json: &str,
+        on_click: &js_sys::Function,
+    );
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum View {
+    Edit,
+    Graph,
+}
+
 fn main() {
     console_error_panic_hook::set_once();
     mount_to_body(App);
@@ -124,6 +277,7 @@ fn App() -> impl IntoView {
 
     let (notes, set_notes) = signal(initial_notes);
     let (current_id, set_current_id) = signal(initial_id);
+    let (view, set_view) = signal(View::Edit);
 
     Effect::new(move |_| {
         let n = notes.get();
@@ -133,6 +287,25 @@ fn App() -> impl IntoView {
     Effect::new(move |_| {
         let id = current_id.get();
         persist_current(&id);
+    });
+
+    let on_node_click: Rc<Closure<dyn Fn(String)>> =
+        Rc::new(Closure::new(move |id: String| {
+            set_current_id.set(Some(id));
+            set_view.set(View::Edit);
+        }));
+
+    let click_for_effect = on_node_click.clone();
+    Effect::new(move |_| {
+        let v = view.get();
+        let n = notes.get();
+        if v != View::Graph {
+            return;
+        }
+        let (nodes_json, edges_json) = build_graph_payload(&n);
+        let func: &js_sys::Function =
+            click_for_effect.as_ref().as_ref().unchecked_ref();
+        render_graph("notepunk-graph", &nodes_json, &edges_json, func);
     });
 
     let current_note = move || {
@@ -145,6 +318,7 @@ fn App() -> impl IntoView {
         let id = n.id.clone();
         set_notes.update(|v| v.insert(0, n));
         set_current_id.set(Some(id));
+        set_view.set(View::Edit);
     };
 
     let delete_current = move |_| {
@@ -187,74 +361,102 @@ fn App() -> impl IntoView {
             <header class="masthead">
                 <h1 class="title">"NOTEPUNK"</h1>
                 <p class="tagline">"// capture · remix · remember //"</p>
+                <nav class="tabs">
+                    <button
+                        class:active=move || view.get() == View::Edit
+                        on:click=move |_| set_view.set(View::Edit)
+                    >
+                        "edit"
+                    </button>
+                    <button
+                        class:active=move || view.get() == View::Graph
+                        on:click=move |_| set_view.set(View::Graph)
+                    >
+                        "graph"
+                    </button>
+                </nav>
             </header>
-            <div class="layout">
-                <aside class="sidebar">
-                    <button class="btn-new" on:click=new_note>"+ new note"</button>
-                    <ul class="note-list">
-                        <For
-                            each=move || notes.get()
-                            key=|n| n.id.clone()
-                            children=move |n: Note| {
-                                let id = n.id.clone();
-                                let id_for_active = id.clone();
-                                let title = n.display_title();
-                                let preview: String =
-                                    n.body.chars().take(60).collect();
-                                let is_active = move || {
-                                    current_id.get() == Some(id_for_active.clone())
-                                };
-                                view! {
-                                    <li
-                                        class:active=is_active
-                                        on:click=move |_| {
-                                            set_current_id.set(Some(id.clone()))
+            {move || match view.get() {
+                View::Edit => view! {
+                    <div class="layout">
+                        <aside class="sidebar">
+                            <button class="btn-new" on:click=new_note>"+ new note"</button>
+                            <ul class="note-list">
+                                <For
+                                    each=move || notes.get()
+                                    key=|n| n.id.clone()
+                                    children=move |n: Note| {
+                                        let id = n.id.clone();
+                                        let id_for_active = id.clone();
+                                        let title = n.display_title();
+                                        let preview: String =
+                                            n.body.chars().take(60).collect();
+                                        let is_active = move || {
+                                            current_id.get() == Some(id_for_active.clone())
+                                        };
+                                        view! {
+                                            <li
+                                                class:active=is_active
+                                                on:click=move |_| {
+                                                    set_current_id.set(Some(id.clone()))
+                                                }
+                                            >
+                                                <div class="note-title">{title}</div>
+                                                <div class="note-preview">{preview}</div>
+                                            </li>
                                         }
-                                    >
-                                        <div class="note-title">{title}</div>
-                                        <div class="note-preview">{preview}</div>
-                                    </li>
-                                }
-                            }
-                        />
-                    </ul>
-                </aside>
-                <section class="editor">
-                    {move || match current_note() {
-                        Some(n) => view! {
-                            <div class="editor-inner">
-                                <input
-                                    class="title-input"
-                                    type="text"
-                                    placeholder="title"
-                                    prop:value=n.title.clone()
-                                    on:input=update_title
+                                    }
                                 />
-                                <textarea
-                                    class="body-input"
-                                    placeholder="// start writing //"
-                                    prop:value=n.body.clone()
-                                    on:input=update_body
-                                ></textarea>
-                                <div class="toolbar">
-                                    <button on:click=export_current>"export .md"</button>
-                                    <button class="danger" on:click=delete_current>
-                                        "delete"
-                                    </button>
-                                </div>
-                            </div>
-                        }
-                        .into_any(),
-                        None => view! {
-                            <div class="empty-state">
-                                <p>"no note open."</p>
-                                <p class="dim">"hit + new note to start."</p>
-                            </div>
-                        }
-                        .into_any(),
-                    }}
-                </section>
-            </div>
+                            </ul>
+                        </aside>
+                        <section class="editor">
+                            {move || match current_note() {
+                                Some(n) => view! {
+                                    <div class="editor-inner">
+                                        <input
+                                            class="title-input"
+                                            type="text"
+                                            placeholder="title"
+                                            prop:value=n.title.clone()
+                                            on:input=update_title
+                                        />
+                                        <textarea
+                                            class="body-input"
+                                            placeholder="// start writing // use [[note title]] to link //"
+                                            prop:value=n.body.clone()
+                                            on:input=update_body
+                                        ></textarea>
+                                        <div class="toolbar">
+                                            <button on:click=export_current>"export .md"</button>
+                                            <button class="danger" on:click=delete_current>
+                                                "delete"
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                .into_any(),
+                                None => view! {
+                                    <div class="empty-state">
+                                        <p>"no note open."</p>
+                                        <p class="dim">"hit + new note to start."</p>
+                                    </div>
+                                }
+                                .into_any(),
+                            }}
+                        </section>
+                    </div>
+                }
+                .into_any(),
+                View::Graph => view! {
+                    <div class="graph-frame">
+                        <div id="notepunk-graph" class="graph-container"></div>
+                        <p class="graph-hint dim">
+                            "// click a node to open the note · [[wiki links]] in note bodies create connections //"
+                        </p>
+                    </div>
+                }
+                .into_any(),
+            }}
         </main>
     }
 }
