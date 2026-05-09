@@ -331,6 +331,61 @@ extern "C" {
 enum View {
     Edit,
     Graph,
+    Guide,
+}
+
+#[component]
+fn GuideView() -> impl IntoView {
+    view! {
+        <article class="guide">
+            <h2>"// the method //"</h2>
+            <ul>
+                <li>"capture before organize."</li>
+                <li>"fragments over essays."</li>
+                <li>"link over nest."</li>
+                <li>"voice over silence."</li>
+                <li>"image over description."</li>
+            </ul>
+
+            <h2>"// the beat in the name //"</h2>
+            <p class="frag">"kerouac wrote SCROLLS — one continuous burst, no paragraph breaks."</p>
+            <p class="frag">"ginsberg said FIRST THOUGHT BEST THOUGHT."</p>
+            <p class="frag">"capture the metaphor before you can defend it."</p>
+            <p class="frag">"capture the assumption before you can disown it."</p>
+            <p class="frag">"capture the question before you answer it."</p>
+
+            <h2>"// the tools //"</h2>
+            <p>"[[wikilinks]] connect notes by title — type the title in double brackets and the graph view will draw the line."</p>
+            <p>"the graph view (top right tab) shows the whole constellation — dense clusters are your obsessions."</p>
+            <p>"the image search pulls free-use images straight from wikimedia commons. click a thumbnail and the markdown is dropped into your note."</p>
+            <p>"voice capture (whisper) is on the way — record a fragment and let it transcribe itself, without breaking your flow."</p>
+
+            <h2>"// a daily loop //"</h2>
+            <p class="frag">"morning · 3 fragments. anything. set the day."</p>
+            <p class="frag">"during · when a metaphor lands, capture it. one line is enough."</p>
+            <p class="frag">"evening · a longer note that [[links back]]. let yesterday touch today."</p>
+            <p class="frag">"weekly · open the graph. the dense clusters are what you actually care about."</p>
+
+            <h2>"// ten prompts to write against //"</h2>
+            <ul>
+                <li>"what metaphor did i notice today?"</li>
+                <li>"what assumption am i making?"</li>
+                <li>"what question is hiding inside this question?"</li>
+                <li>"what got under my skin?"</li>
+                <li>"what would my younger self think of this?"</li>
+                <li>"what would my older self think of this?"</li>
+                <li>"what am i avoiding?"</li>
+                <li>"what am i pretending to know?"</li>
+                <li>"what's the simplest version of this?"</li>
+                <li>"what would change if i was wrong?"</li>
+            </ul>
+
+            <h2>"// philosophy //"</h2>
+            <p class="quiet">"these notes don't have to make sense. they just have to be honest."</p>
+            <p class="quiet">"the goal isn't to remember everything — it's to surprise yourself later."</p>
+            <p class="quiet">"a notebook is a conversation with the version of you that hasn't shown up yet."</p>
+        </article>
+    }
 }
 
 fn main() {
@@ -479,6 +534,12 @@ fn App() -> impl IntoView {
                     >
                         "graph"
                     </button>
+                    <button
+                        class:active=move || view.get() == View::Guide
+                        on:click=move |_| set_view.set(View::Guide)
+                    >
+                        "guide"
+                    </button>
                 </nav>
             </header>
             {move || match view.get() {
@@ -610,6 +671,7 @@ fn App() -> impl IntoView {
                     </div>
                 }
                 .into_any(),
+                View::Guide => view! { <GuideView /> }.into_any(),
             }}
         </main>
     }

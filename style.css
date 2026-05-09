@@ -350,6 +350,66 @@ body {
     font-size: 0.85rem;
 }
 
+.guide {
+    max-width: 720px;
+    margin: 0 auto;
+    line-height: 1.7;
+    padding: 0 0 3rem;
+}
+
+.guide h2 {
+    font-family: 'Special Elite', 'Courier Prime', monospace;
+    font-size: 1.5rem;
+    text-transform: lowercase;
+    margin: 2.5rem 0 1rem;
+    color: var(--red-stamp);
+    border-bottom: 1px dashed var(--ink);
+    padding-bottom: 0.4rem;
+    letter-spacing: 0.05em;
+}
+
+.guide h2:first-child {
+    margin-top: 0;
+}
+
+.guide p {
+    margin-bottom: 0.7rem;
+}
+
+.guide .frag {
+    font-family: 'Special Elite', 'Courier Prime', monospace;
+    font-size: 1.05rem;
+    padding: 0.35rem 0 0.35rem 1rem;
+    border-left: 3px solid var(--red-stamp);
+    margin: 0.4rem 0;
+    background: rgba(184, 68, 42, 0.04);
+}
+
+.guide .quiet {
+    color: rgba(26, 22, 18, 0.65);
+    font-style: italic;
+}
+
+.guide ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.guide ul li {
+    padding: 0.3rem 0 0.3rem 1.6rem;
+    position: relative;
+}
+
+.guide ul li::before {
+    content: "//";
+    position: absolute;
+    left: 0;
+    color: var(--red-stamp);
+    font-weight: 700;
+    font-size: 0.85rem;
+    top: 0.45rem;
+}
+
 .graph-frame {
     margin-top: 0.5rem;
 }
