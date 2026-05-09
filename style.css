@@ -29,15 +29,15 @@ body {
 }
 
 .page {
-    max-width: 720px;
+    max-width: 1100px;
     margin: 0 auto;
-    padding: 4rem 2rem;
+    padding: 3rem 2rem 4rem;
 }
 
 .masthead {
     border-bottom: 3px double var(--ink);
     padding-bottom: 1.5rem;
-    margin-bottom: 3rem;
+    margin-bottom: 2rem;
     position: relative;
 }
 
@@ -71,10 +71,6 @@ body {
     font-size: 1rem;
 }
 
-.placeholder p {
-    margin-bottom: 1rem;
-}
-
 .dim {
     color: rgba(26, 22, 18, 0.5);
     font-size: 0.85rem;
@@ -83,4 +79,183 @@ body {
 ::selection {
     background: var(--red-stamp);
     color: var(--paper);
+}
+
+.layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 2rem;
+    min-height: 65vh;
+}
+
+.sidebar {
+    border-right: 2px dashed var(--ink);
+    padding-right: 1.25rem;
+}
+
+.btn-new {
+    width: 100%;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    padding: 0.75rem;
+    font-family: inherit;
+    font-size: 0.9rem;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    margin-bottom: 1rem;
+    text-transform: lowercase;
+    transition: background 0.1s;
+}
+
+.btn-new:hover {
+    background: var(--red-stamp);
+}
+
+.note-list {
+    list-style: none;
+}
+
+.note-list li {
+    padding: 0.6rem 0.5rem;
+    cursor: pointer;
+    border-bottom: 1px dotted var(--smudge);
+    transition: background 0.1s;
+}
+
+.note-list li:hover {
+    background: rgba(184, 68, 42, 0.08);
+}
+
+.note-list li.active {
+    background: rgba(184, 68, 42, 0.15);
+    border-left: 3px solid var(--red-stamp);
+    padding-left: calc(0.5rem - 3px);
+}
+
+.note-title {
+    font-weight: 700;
+    margin-bottom: 0.2rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.95rem;
+}
+
+.note-preview {
+    font-size: 0.75rem;
+    color: rgba(26, 22, 18, 0.55);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.editor-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    height: 100%;
+}
+
+.title-input {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--ink);
+    padding: 0.5rem 0;
+    font-family: 'Special Elite', 'Courier Prime', monospace;
+    font-size: 2rem;
+    color: var(--ink);
+    outline: none;
+}
+
+.title-input:focus {
+    border-bottom-color: var(--red-stamp);
+}
+
+.title-input::placeholder {
+    color: rgba(26, 22, 18, 0.3);
+}
+
+.body-input {
+    flex: 1;
+    background: transparent;
+    border: 1px dashed rgba(26, 22, 18, 0.3);
+    padding: 1rem;
+    font-family: 'Courier Prime', 'Courier New', monospace;
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--ink);
+    resize: vertical;
+    min-height: 50vh;
+    outline: none;
+}
+
+.body-input:focus {
+    border-color: var(--ink);
+    border-style: solid;
+}
+
+.body-input::placeholder {
+    color: rgba(26, 22, 18, 0.3);
+}
+
+.toolbar {
+    display: flex;
+    gap: 0.75rem;
+    padding-top: 0.5rem;
+}
+
+.toolbar button {
+    background: transparent;
+    border: 2px solid var(--ink);
+    color: var(--ink);
+    padding: 0.5rem 1rem;
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    letter-spacing: 0.08em;
+    text-transform: lowercase;
+    transition: all 0.1s;
+}
+
+.toolbar button:hover {
+    background: var(--ink);
+    color: var(--paper);
+}
+
+.toolbar button.danger {
+    border-color: var(--red-stamp);
+    color: var(--red-stamp);
+}
+
+.toolbar button.danger:hover {
+    background: var(--red-stamp);
+    color: var(--paper);
+}
+
+.empty-state {
+    padding: 4rem 2rem;
+    text-align: center;
+    color: rgba(26, 22, 18, 0.5);
+}
+
+.empty-state p {
+    margin-bottom: 0.5rem;
+}
+
+@media (max-width: 720px) {
+    .layout {
+        grid-template-columns: 1fr;
+    }
+    .sidebar {
+        border-right: none;
+        border-bottom: 2px dashed var(--ink);
+        padding-right: 0;
+        padding-bottom: 1rem;
+        max-height: 30vh;
+        overflow-y: auto;
+    }
+    .title {
+        font-size: 3rem;
+    }
 }
