@@ -267,6 +267,69 @@ fn build_graph_payload(notes: &[Note]) -> (String, String) {
 }
 
 #[wasm_bindgen(inline_js = r#"
+let _whisperPromise = null;
+let _mediaRecorder = null;
+let _chunks = [];
+let _stream = null;
+
+function _ensureWhisper() {
+    if (!_whisperPromise) {
+        _whisperPromise = (async () => {
+            const mod = await import("https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/+esm");
+            return await mod.pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
+        })();
+    }
+    return _whisperPromise;
+}
+
+export async function startRecording() {
+    if (_mediaRecorder && _mediaRecorder.state === 'recording') {
+        return { ok: false, error: 'already recording' };
+    }
+    try {
+        _ensureWhisper().catch(e => console.error('whisper preload failed:', e));
+        _stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        _chunks = [];
+        _mediaRecorder = new MediaRecorder(_stream);
+        _mediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) _chunks.push(e.data);
+        };
+        _mediaRecorder.start();
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, error: 'mic: ' + (e && e.message ? e.message : String(e)) };
+    }
+}
+
+export async function stopAndTranscribe() {
+    if (!_mediaRecorder || _mediaRecorder.state !== 'recording') {
+        return { ok: false, error: 'not recording' };
+    }
+    return new Promise((resolve) => {
+        _mediaRecorder.onstop = async () => {
+            try {
+                if (_stream) _stream.getTracks().forEach(t => t.stop());
+                const blob = new Blob(_chunks, { type: 'audio/webm' });
+                if (blob.size === 0) {
+                    resolve({ ok: false, error: 'no audio recorded' });
+                    return;
+                }
+                const arrayBuf = await blob.arrayBuffer();
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                const audioCtx = new Ctx({ sampleRate: 16000 });
+                const audioData = await audioCtx.decodeAudioData(arrayBuf);
+                const samples = audioData.getChannelData(0);
+                const pipeline = await _ensureWhisper();
+                const result = await pipeline(samples);
+                resolve({ ok: true, text: (result.text || '').trim() });
+            } catch (e) {
+                resolve({ ok: false, error: 'transcribe: ' + (e && e.message ? e.message : String(e)) });
+            }
+        };
+        _mediaRecorder.stop();
+    });
+}
+
 export function renderGraph(containerId, nodesJson, edgesJson, onClick) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -325,6 +388,35 @@ extern "C" {
         edges_json: &str,
         on_click: &js_sys::Function,
     );
+
+    #[wasm_bindgen(js_name = startRecording)]
+    async fn start_recording() -> JsValue;
+
+    #[wasm_bindgen(js_name = stopAndTranscribe)]
+    async fn stop_and_transcribe() -> JsValue;
+}
+
+fn js_field(v: &JsValue, key: &str) -> Option<JsValue> {
+    js_sys::Reflect::get(v, &JsValue::from_str(key)).ok()
+}
+
+fn js_bool(v: &JsValue, key: &str) -> bool {
+    js_field(v, key).and_then(|x| x.as_bool()).unwrap_or(false)
+}
+
+fn js_string(v: &JsValue, key: &str) -> String {
+    js_field(v, key)
+        .and_then(|x| x.as_string())
+        .unwrap_or_default()
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum VoiceState {
+    Idle,
+    Requesting,
+    Recording,
+    Transcribing,
+    Error(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -516,6 +608,51 @@ fn App() -> impl IntoView {
         });
     };
 
+    let (voice_state, set_voice_state) = signal(VoiceState::Idle);
+
+    let mic_click = move |_| {
+        match voice_state.get_untracked() {
+            VoiceState::Idle | VoiceState::Error(_) => {
+                set_voice_state.set(VoiceState::Requesting);
+                wasm_bindgen_futures::spawn_local(async move {
+                    let result = start_recording().await;
+                    if js_bool(&result, "ok") {
+                        set_voice_state.set(VoiceState::Recording);
+                    } else {
+                        set_voice_state.set(VoiceState::Error(js_string(&result, "error")));
+                    }
+                });
+            }
+            VoiceState::Recording => {
+                set_voice_state.set(VoiceState::Transcribing);
+                wasm_bindgen_futures::spawn_local(async move {
+                    let result = stop_and_transcribe().await;
+                    if !js_bool(&result, "ok") {
+                        set_voice_state.set(VoiceState::Error(js_string(&result, "error")));
+                        return;
+                    }
+                    let text = js_string(&result, "text");
+                    if !text.is_empty() {
+                        if let Some(id) = current_id.get_untracked() {
+                            set_notes.update(|v| {
+                                if let Some(n) = v.iter_mut().find(|n| n.id == id) {
+                                    if !n.body.is_empty() && !n.body.ends_with('\n') {
+                                        n.body.push('\n');
+                                    }
+                                    n.body.push_str(&text);
+                                    n.body.push('\n');
+                                    n.updated_at = js_sys::Date::now();
+                                }
+                            });
+                        }
+                    }
+                    set_voice_state.set(VoiceState::Idle);
+                });
+            }
+            VoiceState::Requesting | VoiceState::Transcribing => {}
+        }
+    };
+
     view! {
         <main class="page">
             <header class="masthead">
@@ -593,10 +730,35 @@ fn App() -> impl IntoView {
                                             on:input=update_body
                                         ></textarea>
                                         <div class="toolbar">
+                                            <button
+                                                class:recording=move || matches!(voice_state.get(), VoiceState::Recording)
+                                                class:busy=move || matches!(voice_state.get(), VoiceState::Requesting | VoiceState::Transcribing)
+                                                on:click=mic_click
+                                            >
+                                                {move || match voice_state.get() {
+                                                    VoiceState::Idle => "● record".to_string(),
+                                                    VoiceState::Error(_) => "● record".to_string(),
+                                                    VoiceState::Requesting => "...".to_string(),
+                                                    VoiceState::Recording => "■ stop".to_string(),
+                                                    VoiceState::Transcribing => "transcribing".to_string(),
+                                                }}
+                                            </button>
                                             <button on:click=export_current>"export .md"</button>
                                             <button class="danger" on:click=delete_current>
                                                 "delete"
                                             </button>
+                                            {move || match voice_state.get() {
+                                                VoiceState::Recording => view! {
+                                                    <span class="voice-hint">"// recording — click stop when done //"</span>
+                                                }.into_any(),
+                                                VoiceState::Transcribing => view! {
+                                                    <span class="voice-hint dim">"// first run downloads ~75MB whisper model //"</span>
+                                                }.into_any(),
+                                                VoiceState::Error(e) => view! {
+                                                    <span class="voice-hint error-msg">{e}</span>
+                                                }.into_any(),
+                                                _ => view! { <span></span> }.into_any(),
+                                            }}
                                         </div>
                                         <div class="image-search">
                                             <div class="image-search-bar">

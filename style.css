@@ -263,6 +263,30 @@ body {
     color: var(--paper);
 }
 
+.toolbar button.recording {
+    background: var(--red-stamp);
+    color: var(--paper);
+    border-color: var(--red-stamp);
+    animation: pulse 1.2s ease-in-out infinite;
+}
+
+.toolbar button.busy {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+}
+
+.voice-hint {
+    align-self: center;
+    font-size: 0.8rem;
+    margin-left: 0.5rem;
+    font-style: italic;
+}
+
 .empty-state {
     padding: 4rem 2rem;
     text-align: center;
