@@ -712,6 +712,374 @@ body {
     letter-spacing: 0.04em;
 }
 
+.audio-panel {
+    margin-top: 0.5rem;
+    padding: 0.85rem 1rem;
+    border: 1px dashed var(--ink);
+    background: rgba(244, 234, 213, 0.5);
+}
+
+.audio-bar {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.audio-bar button {
+    background: transparent;
+    border: 2px solid var(--ink);
+    color: var(--ink);
+    padding: 0.4rem 0.85rem;
+    font-family: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+    text-transform: lowercase;
+    letter-spacing: 0.08em;
+    transition: all 0.1s;
+}
+
+.audio-bar button:hover {
+    background: var(--ink);
+    color: var(--paper);
+}
+
+.audio-bar button.recording {
+    background: var(--red-stamp);
+    color: var(--paper);
+    border-color: var(--red-stamp);
+    animation: pulse 1.2s ease-in-out infinite;
+}
+
+.audio-bar button.busy { opacity: 0.6; cursor: wait; }
+
+.audio-empty {
+    margin-top: 0.6rem;
+    font-style: italic;
+}
+
+.track-list {
+    list-style: none;
+    margin-top: 0.6rem;
+    padding: 0;
+}
+
+.track-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto auto 1fr auto;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px dotted var(--smudge);
+    font-size: 0.85rem;
+}
+
+.track-row:last-child { border-bottom: none; }
+
+.track-name {
+    font-family: 'Special Elite', 'Courier Prime', monospace;
+    color: var(--ink);
+}
+
+.track-dur {
+    color: rgba(26, 22, 18, 0.55);
+    font-size: 0.78rem;
+}
+
+.track-row button {
+    background: transparent;
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    padding: 0.18rem 0.55rem;
+    font-family: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.track-row button:hover {
+    background: var(--ink);
+    color: var(--paper);
+}
+
+.track-row button.track-del {
+    border-color: var(--red-stamp);
+    color: var(--red-stamp);
+}
+
+.track-row button.track-del:hover {
+    background: var(--red-stamp);
+    color: var(--paper);
+}
+
+.loop-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.78rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.loop-toggle input[type="checkbox"] {
+    accent-color: var(--red-stamp);
+    cursor: pointer;
+}
+
+.track-row input[type="range"] {
+    accent-color: var(--blue-pen);
+    width: 100%;
+}
+
+.extras {
+    margin-top: 0.5rem;
+    border: 1px dashed rgba(26, 22, 18, 0.3);
+    padding: 0.5rem 0.85rem;
+}
+
+.extras summary {
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--blue-pen);
+    letter-spacing: 0.05em;
+    user-select: none;
+}
+
+.extras summary:hover {
+    color: var(--red-stamp);
+}
+
+.extras .image-search {
+    margin-top: 0.85rem;
+    padding-top: 0;
+    border-top: none;
+}
+
+.graph-bar {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+
+.graph-bar-stats {
+    margin-left: auto;
+    font-size: 0.78rem;
+}
+
+.board-frame {
+    margin-top: 0.5rem;
+}
+
+.board-bar {
+    display: flex;
+    gap: 0.85rem;
+    align-items: center;
+    margin-bottom: 0.85rem;
+    padding: 0.5rem 0.85rem;
+    border: 1px dashed var(--ink);
+    background: rgba(244, 234, 213, 0.5);
+    flex-wrap: wrap;
+}
+
+.handle-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+}
+
+.handle-input {
+    background: transparent;
+    border: 1px solid var(--ink);
+    padding: 0.3rem 0.5rem;
+    font-family: inherit;
+    font-size: 0.85rem;
+    color: var(--ink);
+    outline: none;
+    width: 140px;
+}
+
+.handle-input:focus { border-color: var(--red-stamp); }
+
+.board-bar button {
+    background: transparent;
+    border: 2px solid var(--ink);
+    color: var(--ink);
+    padding: 0.35rem 0.85rem;
+    font-family: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+    text-transform: lowercase;
+    letter-spacing: 0.08em;
+}
+
+.board-bar button:hover {
+    background: var(--ink);
+    color: var(--paper);
+}
+
+.board-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 1.5rem;
+    min-height: 60vh;
+}
+
+.board-list {
+    border-right: 2px dashed var(--ink);
+    padding-right: 1rem;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.post-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.post-row {
+    padding: 0.6rem 0.5rem;
+    cursor: pointer;
+    border-bottom: 1px dotted var(--smudge);
+    transition: background 0.1s;
+}
+
+.post-row:hover {
+    background: rgba(184, 68, 42, 0.08);
+}
+
+.post-row.active {
+    background: rgba(184, 68, 42, 0.15);
+    border-left: 3px solid var(--red-stamp);
+    padding-left: calc(0.5rem - 3px);
+}
+
+.post-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 0.15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.post-meta {
+    font-size: 0.72rem;
+    margin-bottom: 0.2rem;
+}
+
+.post-preview {
+    font-size: 0.78rem;
+    color: rgba(26, 22, 18, 0.6);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.post-detail {
+    padding: 0 0.5rem;
+}
+
+.post-h {
+    font-family: 'Special Elite', 'Courier Prime', monospace;
+    font-size: 1.7rem;
+    color: var(--ink);
+    margin-bottom: 0.2rem;
+}
+
+.comments-h {
+    font-family: 'Special Elite', 'Courier Prime', monospace;
+    color: var(--red-stamp);
+    margin: 1.5rem 0 0.6rem;
+    border-bottom: 1px dashed var(--ink);
+    padding-bottom: 0.3rem;
+    font-size: 1rem;
+    letter-spacing: 0.1em;
+}
+
+.comments {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.comment {
+    padding: 0.6rem 0.85rem;
+    border-left: 3px solid var(--blue-pen);
+    background: rgba(42, 77, 143, 0.05);
+    margin-bottom: 0.5rem;
+}
+
+.comment-author {
+    font-size: 0.72rem;
+    margin-bottom: 0.2rem;
+}
+
+.comment-body {
+    font-size: 0.92rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.comment-compose {
+    margin-top: 1rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.comment-compose textarea {
+    flex: 1;
+    background: transparent;
+    border: 1px dashed var(--ink);
+    padding: 0.6rem 0.75rem;
+    font-family: inherit;
+    font-size: 0.9rem;
+    color: var(--ink);
+    resize: vertical;
+    min-height: 70px;
+    outline: none;
+}
+
+.comment-compose textarea:focus {
+    border-color: var(--red-stamp);
+    border-style: solid;
+}
+
+.comment-compose button {
+    background: var(--ink);
+    color: var(--paper);
+    border: 2px solid var(--ink);
+    padding: 0 1.1rem;
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    text-transform: lowercase;
+    letter-spacing: 0.1em;
+    align-self: flex-end;
+    height: 2.4rem;
+}
+
+.comment-compose button:hover {
+    background: var(--red-stamp);
+    border-color: var(--red-stamp);
+}
+
+@media (max-width: 720px) {
+    .board-layout {
+        grid-template-columns: 1fr;
+    }
+    .board-list {
+        border-right: none;
+        border-bottom: 2px dashed var(--ink);
+        padding-right: 0;
+        padding-bottom: 0.85rem;
+        max-height: 35vh;
+    }
+}
+
 @media (max-width: 720px) {
     .layout {
         grid-template-columns: 1fr;
