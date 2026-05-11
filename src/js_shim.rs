@@ -348,7 +348,6 @@ export function render3DGraph(containerId, nodesJson, edgesJson, onNodeTap, onEd
         .linkColor(l => l.color)
         .linkOpacity(l => l.kind === 'auto' ? 0.35 : 0.7)
         .linkWidth(l => l.width)
-        .linkLineDash(l => l.dash)
         .linkDirectionalArrowLength(l => l.kind === 'wikilink' ? 3 : 0)
         .linkDirectionalArrowRelPos(0.95)
         .linkDirectionalArrowColor(l => l.color)
