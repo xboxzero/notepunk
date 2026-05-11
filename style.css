@@ -609,6 +609,7 @@ body {
 .kind-swatch.tag        { border-top: 3px dashed #2a4d8f; }
 .kind-swatch.similarity { border-top: 3px dotted #7a6f5c; }
 .kind-swatch.manual     { border-top: 3px solid #1a1612; }
+.kind-swatch.auto       { border-top: 3px dashed #c89b1a; }
 
 .ctrl-slider {
     display: inline-flex;
@@ -1099,4 +1100,345 @@ body {
         position: static;
         margin-top: 1rem;
     }
+}
+
+:root {
+    --gold: #c89b1a;
+    --gold-deep: #8a6810;
+}
+
+.hud {
+    display: grid;
+    grid-template-columns: auto minmax(140px, 1fr) auto auto minmax(180px, 1.4fr) auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 0.55rem 0.95rem;
+    margin: 0 0 1.25rem;
+    border: 3px solid var(--ink);
+    background: var(--paper);
+    box-shadow: 5px 5px 0 var(--ink);
+    font-family: 'Special Elite', 'Courier Prime', monospace;
+    position: relative;
+}
+
+.hud::before {
+    content: "// STATUS //";
+    position: absolute;
+    top: -0.8rem;
+    left: 0.7rem;
+    background: var(--paper);
+    padding: 0 0.5rem;
+    font-size: 0.62rem;
+    letter-spacing: 0.35em;
+    color: var(--red-stamp);
+}
+
+.hud-level {
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    padding: 0.35rem 0.85rem;
+    font-family: 'Special Elite', monospace;
+    font-size: 1rem;
+    letter-spacing: 0.18em;
+    cursor: pointer;
+    text-shadow: 1px 1px 0 var(--red-stamp);
+    box-shadow: 2px 2px 0 var(--red-stamp);
+    transition: transform 0.05s;
+}
+
+.hud-level:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--red-stamp);
+}
+
+.hud-level:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--red-stamp);
+}
+
+.hud-xp-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.hud-xp-bar {
+    position: relative;
+    height: 12px;
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    background-image: repeating-linear-gradient(
+        90deg,
+        transparent 0,
+        transparent 9px,
+        rgba(26,22,18,0.18) 9px,
+        rgba(26,22,18,0.18) 10px
+    );
+    overflow: hidden;
+}
+
+.hud-xp-fill {
+    height: 100%;
+    background: var(--red-stamp);
+    background-image: repeating-linear-gradient(
+        90deg,
+        var(--red-stamp) 0,
+        var(--red-stamp) 9px,
+        #8a3320 9px,
+        #8a3320 10px
+    );
+    transition: width 0.4s ease-out;
+}
+
+.hud-xp-num {
+    font-size: 0.7rem;
+    color: rgba(26,22,18,0.65);
+    letter-spacing: 0.05em;
+}
+
+.hud-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.55rem;
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    font-size: 0.85rem;
+    box-shadow: 2px 2px 0 var(--ink);
+}
+
+.hud-gold { color: var(--gold-deep); border-color: var(--gold-deep); box-shadow: 2px 2px 0 var(--gold-deep); }
+.hud-gold .hud-icon { color: var(--gold); font-size: 1rem; }
+
+.hud-streak { color: var(--red-stamp); border-color: var(--red-stamp); box-shadow: 2px 2px 0 var(--red-stamp); }
+.hud-streak .hud-icon { color: var(--red-stamp); font-size: 1rem; }
+
+.hud-value {
+    font-family: 'Special Elite', monospace;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+}
+
+.hud-quest {
+    border-left: 3px solid var(--ink);
+    padding: 0 0 0 0.8rem;
+    cursor: pointer;
+    min-width: 0;
+}
+
+.hud-quest:hover .hud-quest-title { color: var(--red-stamp); }
+
+.hud-quest-line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.hud-quest-title {
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ink);
+}
+
+.hud-quest-prog {
+    font-size: 0.7rem;
+    margin-left: auto;
+}
+
+.hud-quest-bar {
+    margin-top: 0.2rem;
+    height: 6px;
+    border: 1px solid var(--ink);
+    background: var(--paper);
+}
+
+.hud-quest-fill {
+    height: 100%;
+    background: var(--blue-pen);
+    transition: width 0.3s ease-out;
+}
+
+.hud-sfx {
+    background: transparent;
+    border: 2px solid var(--ink);
+    color: var(--ink);
+    padding: 0.25rem 0.65rem;
+    font-family: 'Special Elite', monospace;
+    font-size: 0.78rem;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+}
+
+.hud-sfx:hover { background: var(--ink); color: var(--paper); }
+
+.hud-sfx.muted {
+    color: rgba(26,22,18,0.4);
+    border-color: rgba(26,22,18,0.4);
+    text-decoration: line-through;
+}
+
+.hud-flash {
+    grid-column: 1 / -1;
+    margin-top: 0.45rem;
+    padding: 0.35rem 0.7rem;
+    background: var(--ink);
+    color: var(--gold);
+    font-family: 'Special Elite', monospace;
+    font-size: 0.85rem;
+    letter-spacing: 0.15em;
+    text-align: center;
+    box-shadow: 2px 2px 0 var(--gold-deep);
+    animation: flash-in 0.3s ease-out;
+}
+
+@keyframes flash-in {
+    from { transform: translateY(-6px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+}
+
+@media (max-width: 720px) {
+    .hud {
+        grid-template-columns: auto 1fr auto;
+        grid-template-rows: auto auto auto;
+        gap: 0.6rem 0.8rem;
+    }
+    .hud-xp-wrap { grid-column: 2 / 4; }
+    .hud-gold, .hud-streak { grid-row: 2; }
+    .hud-quest { grid-column: 1 / 4; border-left: none; padding-left: 0; border-top: 2px dashed var(--ink); padding-top: 0.5rem; }
+    .hud-sfx { grid-column: 3; grid-row: 1; }
+}
+
+.quests-frame { margin-top: 0.5rem; }
+
+.quests-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 1.25rem;
+}
+
+.quests-grid > .skills-panel { grid-column: 1 / -1; }
+
+.quest-panel {
+    border: 2px solid var(--ink);
+    background: rgba(244, 234, 213, 0.6);
+    padding: 1rem 1.15rem;
+    box-shadow: 4px 4px 0 var(--ink);
+}
+
+.panel-h {
+    font-family: 'Special Elite', monospace;
+    font-size: 1.15rem;
+    color: var(--red-stamp);
+    margin-bottom: 0.5rem;
+    border-bottom: 1px dashed var(--ink);
+    padding-bottom: 0.35rem;
+    letter-spacing: 0.08em;
+}
+
+.quest-date { margin-bottom: 0.75rem; font-size: 0.78rem; }
+
+.quest-list { list-style: none; padding: 0; }
+
+.quest-row {
+    padding: 0.6rem 0;
+    border-bottom: 1px dotted var(--smudge);
+}
+
+.quest-row.done .quest-title { text-decoration: line-through; color: rgba(26,22,18,0.45); }
+.quest-row.done .quest-marker { color: var(--gold-deep); }
+.quest-row:last-child { border-bottom: none; }
+
+.quest-title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.55rem;
+}
+
+.quest-marker {
+    font-family: 'Special Elite', monospace;
+    color: var(--blue-pen);
+    width: 1.2em;
+    text-align: center;
+}
+
+.quest-title { flex: 1; font-size: 0.92rem; }
+
+.quest-prog { font-size: 0.78rem; }
+
+.quest-bar {
+    margin: 0.35rem 0 0.25rem;
+    height: 8px;
+    border: 1px solid var(--ink);
+    background: var(--paper);
+}
+
+.quest-fill {
+    height: 100%;
+    background: var(--red-stamp);
+    transition: width 0.3s ease-out;
+}
+
+.quest-reward { font-size: 0.72rem; color: var(--gold-deep); letter-spacing: 0.04em; }
+
+.stat-list { list-style: none; padding: 0; }
+.stat-list li { padding: 0.3rem 0; font-size: 0.92rem; border-bottom: 1px dotted var(--smudge); }
+.stat-list li:last-child { border-bottom: none; }
+.stat-list strong { color: var(--red-stamp); font-family: 'Special Elite', monospace; }
+
+.skill-list { list-style: none; padding: 0; }
+
+.skill-row {
+    padding: 0.55rem 0;
+    border-bottom: 1px dotted var(--smudge);
+}
+
+.skill-row:last-child { border-bottom: none; }
+
+.skill-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+}
+
+.skill-tag {
+    font-family: 'Special Elite', monospace;
+    color: var(--blue-pen);
+    font-size: 0.95rem;
+}
+
+.skill-lvl {
+    background: var(--ink);
+    color: var(--gold);
+    font-size: 0.72rem;
+    padding: 0.05rem 0.45rem;
+    letter-spacing: 0.1em;
+}
+
+.skill-uses { font-size: 0.72rem; }
+
+.skill-bar {
+    margin: 0.3rem 0 0.2rem;
+    height: 6px;
+    border: 1px solid var(--ink);
+    background: var(--paper);
+}
+
+.skill-fill {
+    height: 100%;
+    background: var(--gold);
+}
+
+.skill-preview {
+    font-size: 0.72rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+    .quests-grid { grid-template-columns: 1fr; }
 }

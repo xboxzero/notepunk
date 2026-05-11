@@ -4,6 +4,7 @@ mod config;
 mod graph;
 mod js_shim;
 mod model;
+mod rpg;
 mod similarity;
 mod supabase;
 
@@ -14,6 +15,7 @@ use graph::{build as build_graph, GraphStats};
 use js_shim::{
     audio_delete, audio_play, audio_play_mix, audio_set_volume, audio_start_recording,
     audio_stop, audio_stop_all, audio_stop_recording, js_bool, js_f64, js_string, render_3d_graph,
+    sfx_mute, sfx_play,
 };
 use leptos::ev;
 use leptos::mount::mount_to_body;
@@ -23,8 +25,14 @@ use model::{
     persist_current, persist_graph_config, persist_manual_edges, persist_notes, ManualEdge, Note,
 };
 use pulldown_cmark::{html as md_html, Options as MdOpts, Parser as MdParser};
+use rpg::{
+    ensure_today_quests, load_quests, load_rpg, load_sfx_muted, persist_quests, persist_rpg,
+    persist_sfx_muted, progress_quest, skill_level, today, touch_day, QuestKind, QuestState,
+    RpgState,
+};
 use serde::Serialize;
-use similarity::{body_matches_query, extract_tags};
+use similarity::{body_matches_query, count_images, extract_tags, extract_wikilinks};
+use std::collections::HashMap;
 use std::rc::Rc;
 use supabase::{fetch_comments, fetch_posts, post_comment, publish_post, Comment, Post};
 use wasm_bindgen::prelude::*;
@@ -53,6 +61,7 @@ enum RecordState {
 enum View {
     Notes,
     Graph,
+    Quests,
     Board,
     Guide,
 }
@@ -62,6 +71,118 @@ struct MixTrack<'a> {
     id: &'a str,
     looping: bool,
     volume: f64,
+}
+
+fn xp_progress_pct(state: &RpgState) -> f64 {
+    let needed = state.xp_for_level();
+    if needed == 0 {
+        return 1.0;
+    }
+    (state.xp_into_level() as f64 / needed as f64).clamp(0.0, 1.0)
+}
+
+fn flash_message(set_msg: WriteSignal<Option<String>>, text: String) {
+    set_msg.set(Some(text));
+    let cb = Closure::once(move || set_msg.set(None));
+    if let Some(w) = web_sys::window() {
+        let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+            cb.as_ref().unchecked_ref(),
+            4200,
+        );
+    }
+    cb.forget();
+}
+
+#[component]
+fn Hud(
+    rpg: ReadSignal<RpgState>,
+    quests: ReadSignal<QuestState>,
+    sfx_muted: ReadSignal<bool>,
+    set_sfx_muted: WriteSignal<bool>,
+    event_msg: ReadSignal<Option<String>>,
+    set_view: WriteSignal<View>,
+) -> impl IntoView {
+    view! {
+        <div class="hud">
+            <button
+                class="hud-level"
+                on:click=move |_| set_view.set(View::Quests)
+                title="open quest log"
+            >
+                {move || format!("LVL {}", rpg.get().level())}
+            </button>
+            <div class="hud-xp-wrap">
+                <div class="hud-xp-bar">
+                    <div class="hud-xp-fill"
+                        style:width=move || format!("{:.1}%", xp_progress_pct(&rpg.get()) * 100.0)
+                    ></div>
+                </div>
+                <div class="hud-xp-num">
+                    {move || {
+                        let s = rpg.get();
+                        format!("{} / {} xp", s.xp_into_level(), s.xp_for_level())
+                    }}
+                </div>
+            </div>
+            <div class="hud-stat hud-gold" title="gold">
+                <span class="hud-icon">"⌬"</span>
+                <span class="hud-value">{move || rpg.get().gold}</span>
+            </div>
+            <div class="hud-stat hud-streak" title="streak">
+                <span class="hud-icon">"※"</span>
+                <span class="hud-value">{move || format!("{}d", rpg.get().streak)}</span>
+            </div>
+            <div class="hud-quest"
+                 on:click=move |_| set_view.set(View::Quests)
+                 title="open quest log">
+                {move || {
+                    let qs = quests.get();
+                    let first = qs.quests.iter().find(|q| !q.claimed).cloned();
+                    match first {
+                        Some(q) => {
+                            let pct = if q.target == 0 { 1.0 } else {
+                                (q.progress as f64 / q.target as f64).clamp(0.0, 1.0)
+                            };
+                            view! {
+                                <div class="hud-quest-line">
+                                    <span class="hud-quest-title">{q.title()}</span>
+                                    <span class="hud-quest-prog">
+                                        {format!(" {}/{}", q.progress.min(q.target), q.target)}
+                                    </span>
+                                </div>
+                                <div class="hud-quest-bar">
+                                    <div class="hud-quest-fill"
+                                         style:width=format!("{:.0}%", pct * 100.0)>
+                                    </div>
+                                </div>
+                            }.into_any()
+                        }
+                        None => view! {
+                            <div class="hud-quest-line">
+                                <span class="hud-quest-title">"all quests cleared today ✶"</span>
+                            </div>
+                        }.into_any(),
+                    }
+                }}
+            </div>
+            <button
+                class="hud-sfx"
+                class:muted=move || sfx_muted.get()
+                on:click=move |_| {
+                    let new_val = !sfx_muted.get_untracked();
+                    set_sfx_muted.set(new_val);
+                    sfx_mute(new_val);
+                    if !new_val { sfx_play("tap"); }
+                }
+                title="toggle sfx"
+            >
+                {move || if sfx_muted.get() { "♪ off" } else { "♪ on" }}
+            </button>
+            {move || event_msg.get().map(|m| view! {
+                <div class="hud-flash">{m}</div>
+            })}
+        </div>
+    }
 }
 
 #[component]
@@ -132,6 +253,7 @@ fn App() -> impl IntoView {
         tags: 0,
         similarity: 0,
         manual: 0,
+        auto: 0,
     });
     let (tracks, set_tracks) = signal(initial_tracks);
     let (record_state, set_record_state) = signal(RecordState::Idle);
@@ -143,6 +265,37 @@ fn App() -> impl IntoView {
     let (post_comments, set_post_comments) = signal(Vec::<Comment>::new());
     let (comment_draft, set_comment_draft) = signal(String::new());
     let (publish_status, set_publish_status) = signal(Option::<String>::None);
+
+    let mut bootstrap_rpg = load_rpg();
+    let mut bootstrap_quests = load_quests();
+    let today_str = today();
+    let initial_muted = load_sfx_muted();
+    ensure_today_quests(&mut bootstrap_quests, &today_str);
+    let streak_update = touch_day(&mut bootstrap_rpg, &today_str);
+    let streak_msg = if streak_update.new_streak {
+        Some(format!(
+            "// day {} streak · +{} xp //",
+            bootstrap_rpg.streak, streak_update.bonus_xp
+        ))
+    } else {
+        None
+    };
+    let streak_level_up = streak_update.leveled_up;
+
+    let (rpg, set_rpg) = signal(bootstrap_rpg);
+    let (quests, set_quests) = signal(bootstrap_quests);
+    let (sfx_muted, set_sfx_muted) = signal(initial_muted);
+    let (event_msg, set_event_msg) = signal(Option::<String>::None);
+
+    sfx_mute(initial_muted);
+    if let Some(m) = streak_msg {
+        flash_message(set_event_msg, m);
+        if streak_level_up {
+            sfx_play("level");
+        } else {
+            sfx_play("xp");
+        }
+    }
 
     Effect::new(move |_| {
         persist_notes(&notes.get());
@@ -162,6 +315,230 @@ fn App() -> impl IntoView {
     Effect::new(move |_| {
         let h = handle.get();
         persist_handle(&h);
+    });
+    Effect::new(move |_| {
+        persist_rpg(&rpg.get());
+    });
+    Effect::new(move |_| {
+        persist_quests(&quests.get());
+    });
+    Effect::new(move |_| {
+        persist_sfx_muted(sfx_muted.get());
+    });
+
+    Effect::new(move |_| {
+        let notes_now = notes.get();
+        let mut total_chars: u64 = 0;
+        let mut total_wikilinks: u32 = 0;
+        let mut total_tags: u32 = 0;
+        let mut total_images: u32 = 0;
+        for n in &notes_now {
+            total_chars +=
+                n.body.chars().count() as u64 + n.title.chars().count() as u64;
+            total_wikilinks += extract_wikilinks(&n.body).len() as u32;
+            total_tags += extract_tags(&n.body).len() as u32;
+            total_images += count_images(&n.body);
+        }
+        let total_notes = notes_now.len() as u32;
+
+        let mut rpg_state = rpg.get_untracked();
+        let mut quest_state = quests.get_untracked();
+
+        if !rpg_state.initialized {
+            rpg_state.total_chars = total_chars;
+            rpg_state.total_wikilinks = total_wikilinks;
+            rpg_state.total_tags = total_tags;
+            rpg_state.total_images = total_images;
+            rpg_state.total_notes = total_notes;
+            rpg_state.total_manual_links = manual_edges.get_untracked().len() as u32;
+            rpg_state.total_tracks = tracks.get_untracked().len() as u32;
+            rpg_state.initialized = true;
+            set_rpg.set(rpg_state);
+            return;
+        }
+
+        let chars_delta = total_chars.saturating_sub(rpg_state.total_chars);
+        let wikilink_delta = total_wikilinks.saturating_sub(rpg_state.total_wikilinks);
+        let tag_delta = total_tags.saturating_sub(rpg_state.total_tags);
+        let image_delta = total_images.saturating_sub(rpg_state.total_images);
+        let notes_delta = total_notes.saturating_sub(rpg_state.total_notes);
+
+        rpg_state.total_chars = total_chars;
+        rpg_state.total_wikilinks = total_wikilinks;
+        rpg_state.total_tags = total_tags;
+        rpg_state.total_images = total_images;
+        rpg_state.total_notes = total_notes;
+
+        if chars_delta == 0
+            && wikilink_delta == 0
+            && tag_delta == 0
+            && image_delta == 0
+            && notes_delta == 0
+        {
+            set_rpg.set(rpg_state);
+            return;
+        }
+
+        let prev_level = rpg_state.level();
+        let mut xp_gain: u64 = 0;
+        let mut gold_gain: u64 = 0;
+        if chars_delta > 0 {
+            xp_gain += chars_delta / 80;
+        }
+        if wikilink_delta > 0 {
+            xp_gain += wikilink_delta as u64 * 5;
+            gold_gain += wikilink_delta as u64;
+        }
+        if tag_delta > 0 {
+            xp_gain += tag_delta as u64 * 3;
+        }
+        if image_delta > 0 {
+            xp_gain += image_delta as u64 * 2;
+        }
+        if notes_delta > 0 {
+            xp_gain += notes_delta as u64 * 5;
+            gold_gain += notes_delta as u64 * 2;
+        }
+        rpg_state.xp = rpg_state.xp.saturating_add(xp_gain);
+        rpg_state.gold = rpg_state.gold.saturating_add(gold_gain);
+
+        let mut completed_titles: Vec<String> = Vec::new();
+        if chars_delta > 0 {
+            let amt = chars_delta.min(u32::MAX as u64) as u32;
+            if let Some(t) =
+                progress_quest(&mut rpg_state, &mut quest_state, QuestKind::WriteChars, amt)
+            {
+                completed_titles.push(t);
+            }
+        }
+        if wikilink_delta > 0 {
+            if let Some(t) = progress_quest(
+                &mut rpg_state,
+                &mut quest_state,
+                QuestKind::AddWikilinks,
+                wikilink_delta,
+            ) {
+                completed_titles.push(t);
+            }
+        }
+        if tag_delta > 0 {
+            if let Some(t) =
+                progress_quest(&mut rpg_state, &mut quest_state, QuestKind::AddTags, tag_delta)
+            {
+                completed_titles.push(t);
+            }
+        }
+        if image_delta > 0 {
+            if let Some(t) = progress_quest(
+                &mut rpg_state,
+                &mut quest_state,
+                QuestKind::InsertImages,
+                image_delta,
+            ) {
+                completed_titles.push(t);
+            }
+        }
+        if notes_delta > 0 {
+            if let Some(t) = progress_quest(
+                &mut rpg_state,
+                &mut quest_state,
+                QuestKind::CreateNotes,
+                notes_delta,
+            ) {
+                completed_titles.push(t);
+            }
+        }
+
+        let leveled = rpg_state.level() > prev_level;
+        set_rpg.set(rpg_state);
+        set_quests.set(quest_state);
+
+        if leveled {
+            sfx_play("level");
+            flash_message(set_event_msg, "// LEVEL UP //".to_string());
+        }
+        if let Some(t) = completed_titles.first() {
+            sfx_play("quest");
+            flash_message(set_event_msg, format!("// quest cleared: {} //", t));
+        }
+    });
+
+    Effect::new(move |_| {
+        let edges_now = manual_edges.get();
+        let count = edges_now.len() as u32;
+        let mut rpg_state = rpg.get_untracked();
+        let mut quest_state = quests.get_untracked();
+        if !rpg_state.initialized {
+            rpg_state.total_manual_links = count;
+            set_rpg.set(rpg_state);
+            return;
+        }
+        let delta = count.saturating_sub(rpg_state.total_manual_links);
+        rpg_state.total_manual_links = count;
+        if delta == 0 {
+            set_rpg.set(rpg_state);
+            return;
+        }
+        let prev_level = rpg_state.level();
+        rpg_state.xp = rpg_state.xp.saturating_add(delta as u64 * 4);
+        rpg_state.gold = rpg_state.gold.saturating_add(delta as u64);
+        let completed = progress_quest(
+            &mut rpg_state,
+            &mut quest_state,
+            QuestKind::LinkManual,
+            delta,
+        );
+        let leveled = rpg_state.level() > prev_level;
+        set_rpg.set(rpg_state);
+        set_quests.set(quest_state);
+        if leveled {
+            sfx_play("level");
+            flash_message(set_event_msg, "// LEVEL UP //".to_string());
+        } else if let Some(t) = completed {
+            sfx_play("quest");
+            flash_message(set_event_msg, format!("// quest cleared: {} //", t));
+        } else {
+            sfx_play("xp");
+        }
+    });
+
+    Effect::new(move |_| {
+        let tracks_now = tracks.get();
+        let count = tracks_now.len() as u32;
+        let mut rpg_state = rpg.get_untracked();
+        let mut quest_state = quests.get_untracked();
+        if !rpg_state.initialized {
+            rpg_state.total_tracks = count;
+            set_rpg.set(rpg_state);
+            return;
+        }
+        let delta = count.saturating_sub(rpg_state.total_tracks);
+        rpg_state.total_tracks = count;
+        if delta == 0 {
+            set_rpg.set(rpg_state);
+            return;
+        }
+        let prev_level = rpg_state.level();
+        rpg_state.xp = rpg_state.xp.saturating_add(delta as u64 * 10);
+        rpg_state.gold = rpg_state.gold.saturating_add(delta as u64 * 5);
+        let completed = progress_quest(
+            &mut rpg_state,
+            &mut quest_state,
+            QuestKind::RecordAudio,
+            delta,
+        );
+        let leveled = rpg_state.level() > prev_level;
+        set_rpg.set(rpg_state);
+        set_quests.set(quest_state);
+        if leveled {
+            sfx_play("level");
+            flash_message(set_event_msg, "// LEVEL UP //".to_string());
+        } else if let Some(t) = completed {
+            sfx_play("quest");
+            flash_message(set_event_msg, format!("// quest cleared: {} //", t));
+        } else {
+            sfx_play("gold");
+        }
     });
 
     let on_node_tap: Rc<Closure<dyn Fn(String)>> = Rc::new(Closure::new(move |payload: String| {
@@ -363,8 +740,37 @@ fn App() -> impl IntoView {
                 Ok(_) => {
                     set_publish_status.set(Some("// published //".to_string()));
                     set_posts.set(Vec::new());
+                    let mut rpg_state = rpg.get_untracked();
+                    let mut quest_state = quests.get_untracked();
+                    let prev_level = rpg_state.level();
+                    rpg_state.total_posts_published =
+                        rpg_state.total_posts_published.saturating_add(1);
+                    rpg_state.xp = rpg_state.xp.saturating_add(25);
+                    rpg_state.gold = rpg_state.gold.saturating_add(20);
+                    let completed = progress_quest(
+                        &mut rpg_state,
+                        &mut quest_state,
+                        QuestKind::Publish,
+                        1,
+                    );
+                    let leveled = rpg_state.level() > prev_level;
+                    set_rpg.set(rpg_state);
+                    set_quests.set(quest_state);
+                    if leveled {
+                        sfx_play("level");
+                        flash_message(set_event_msg, "// LEVEL UP //".to_string());
+                    } else if let Some(t) = completed {
+                        sfx_play("quest");
+                        flash_message(set_event_msg, format!("// quest cleared: {} //", t));
+                    } else {
+                        sfx_play("gold");
+                        flash_message(set_event_msg, "// +25 xp · +20 gold //".to_string());
+                    }
                 }
-                Err(e) => set_publish_status.set(Some(format!("// publish failed: {} //", e))),
+                Err(e) => {
+                    sfx_play("err");
+                    set_publish_status.set(Some(format!("// publish failed: {} //", e)));
+                }
             }
         });
     };
@@ -550,18 +956,21 @@ fn App() -> impl IntoView {
 
     view! {
         <main class="page">
+            <Hud rpg=rpg quests=quests sfx_muted=sfx_muted set_sfx_muted=set_sfx_muted event_msg=event_msg set_view=set_view />
             <header class="masthead">
                 <h1 class="title">"NOTEPUNK"</h1>
-                <p class="tagline">"// capture · loop · publish · connect //"</p>
+                <p class="tagline">"// capture · loop · publish · level up //"</p>
                 <nav class="tabs">
                     <button class:active=move || view.get() == View::Notes
-                            on:click=move |_| set_view.set(View::Notes)>"notes"</button>
+                            on:click=move |_| { set_view.set(View::Notes); sfx_play("tap"); }>"notes"</button>
                     <button class:active=move || view.get() == View::Graph
-                            on:click=move |_| set_view.set(View::Graph)>"graph"</button>
+                            on:click=move |_| { set_view.set(View::Graph); sfx_play("tap"); }>"graph"</button>
+                    <button class:active=move || view.get() == View::Quests
+                            on:click=move |_| { set_view.set(View::Quests); sfx_play("tap"); }>"quests"</button>
                     <button class:active=move || view.get() == View::Board
-                            on:click=move |_| set_view.set(View::Board)>"board"</button>
+                            on:click=move |_| { set_view.set(View::Board); sfx_play("tap"); }>"board"</button>
                     <button class:active=move || view.get() == View::Guide
-                            on:click=move |_| set_view.set(View::Guide)>"guide"</button>
+                            on:click=move |_| { set_view.set(View::Guide); sfx_play("tap"); }>"guide"</button>
                 </nav>
             </header>
             {move || match view.get() {
@@ -798,8 +1207,8 @@ fn App() -> impl IntoView {
                             <span class="graph-bar-stats dim">
                                 {move || {
                                     let s = graph_stats.get();
-                                    format!("{} wikilinks · {} tags · {} similar · {} manual",
-                                        s.wikilinks, s.tags, s.similarity, s.manual)
+                                    format!("{} wikilinks · {} tags · {} similar · {} manual · {} auto",
+                                        s.wikilinks, s.tags, s.similarity, s.manual, s.auto)
                                 }}
                             </span>
                         </div>
@@ -846,6 +1255,16 @@ fn App() -> impl IntoView {
                                         />
                                         <span class="kind-swatch manual"></span>"manual"
                                     </label>
+                                    <label class="ctrl-toggle">
+                                        <input type="checkbox"
+                                            prop:checked=move || graph_cfg.get().include_auto
+                                            on:change=move |ev| {
+                                                let v = event_target_checked(&ev);
+                                                set_graph_cfg.update(|c| c.include_auto = v);
+                                            }
+                                        />
+                                        <span class="kind-swatch auto"></span>"auto"
+                                    </label>
                                 </div>
                                 <div class="ctrl-group">
                                     <label class="ctrl-slider">
@@ -874,6 +1293,120 @@ fn App() -> impl IntoView {
                         </p>
                     </div>
                 }.into_any(),
+
+                View::Quests => {
+                    let notes_for_skills = notes.get();
+                    let mut tag_uses: HashMap<String, u32> = HashMap::new();
+                    let mut tag_notes: HashMap<String, Vec<String>> = HashMap::new();
+                    for n in &notes_for_skills {
+                        for t in extract_tags(&n.body) {
+                            *tag_uses.entry(t.clone()).or_insert(0) += 1;
+                            tag_notes
+                                .entry(t)
+                                .or_insert_with(Vec::new)
+                                .push(n.display_title());
+                        }
+                    }
+                    let mut skill_rows: Vec<(String, u32, u32, Vec<String>)> = tag_uses
+                        .into_iter()
+                        .map(|(t, uses)| {
+                            let lvl = skill_level(uses);
+                            let titles = tag_notes.remove(&t).unwrap_or_default();
+                            (t, lvl, uses, titles)
+                        })
+                        .collect();
+                    skill_rows.sort_by(|a, b| b.1.cmp(&a.1).then(b.2.cmp(&a.2)).then(a.0.cmp(&b.0)));
+                    view! {
+                        <div class="quests-frame">
+                            <div class="quests-grid">
+                                <section class="quest-panel">
+                                    <h2 class="panel-h">"// today's quests //"</h2>
+                                    <p class="dim quest-date">{format!("// {} //", today())}</p>
+                                    {move || {
+                                        let qs = quests.get();
+                                        if qs.quests.is_empty() {
+                                            view! { <p class="dim">"// no quests today //"</p> }.into_any()
+                                        } else {
+                                            view! {
+                                                <ul class="quest-list">
+                                                    {qs.quests.into_iter().map(|q| {
+                                                        let pct = if q.target == 0 { 1.0 } else {
+                                                            (q.progress as f64 / q.target as f64).clamp(0.0, 1.0)
+                                                        };
+                                                        let done = q.claimed;
+                                                        let prog_label = format!("{}/{}", q.progress.min(q.target), q.target);
+                                                        let reward = format!("+{} xp · +{} ⌬", q.xp_reward, q.gold_reward);
+                                                        view! {
+                                                            <li class="quest-row" class:done=done>
+                                                                <div class="quest-title-row">
+                                                                    <span class="quest-marker">{ if done { "✓" } else { "▢" } }</span>
+                                                                    <span class="quest-title">{q.title()}</span>
+                                                                    <span class="quest-prog dim">{prog_label}</span>
+                                                                </div>
+                                                                <div class="quest-bar">
+                                                                    <div class="quest-fill"
+                                                                         style:width=format!("{:.0}%", pct * 100.0)></div>
+                                                                </div>
+                                                                <div class="quest-reward dim">{reward}</div>
+                                                            </li>
+                                                        }
+                                                    }).collect_view()}
+                                                </ul>
+                                            }.into_any()
+                                        }
+                                    }}
+                                </section>
+                                <section class="quest-panel">
+                                    <h2 class="panel-h">"// player //"</h2>
+                                    <ul class="stat-list">
+                                        <li>"level " <strong>{move || rpg.get().level().to_string()}</strong></li>
+                                        <li>"xp " <strong>{move || rpg.get().xp.to_string()}</strong></li>
+                                        <li>"gold ⌬ " <strong>{move || rpg.get().gold.to_string()}</strong></li>
+                                        <li>"streak ※ " <strong>{move || format!("{} days", rpg.get().streak)}</strong>
+                                            " (best " {move || rpg.get().best_streak.to_string()} ")"</li>
+                                        <li class="dim">"notes " {move || rpg.get().total_notes.to_string()}
+                                            " · wikilinks " {move || rpg.get().total_wikilinks.to_string()}
+                                            " · tags " {move || rpg.get().total_tags.to_string()}
+                                            " · tracks " {move || rpg.get().total_tracks.to_string()}
+                                            " · published " {move || rpg.get().total_posts_published.to_string()}</li>
+                                    </ul>
+                                </section>
+                                <section class="quest-panel skills-panel">
+                                    <h2 class="panel-h">"// skill tree //"</h2>
+                                    <p class="dim">"// each #tag is a skill. write more notes with it to level up. //"</p>
+                                    {if skill_rows.is_empty() {
+                                        view! { <p class="dim">"// no skills yet — drop a #tag into a note //"</p> }.into_any()
+                                    } else {
+                                        view! {
+                                            <ul class="skill-list">
+                                                {skill_rows.into_iter().map(|(tag, lvl, uses, titles)| {
+                                                    let bar_pct = (uses as f64 / (uses as f64 + 4.0).max(1.0)) * 100.0;
+                                                    let preview = titles.iter().take(3).cloned().collect::<Vec<_>>().join(" · ");
+                                                    view! {
+                                                        <li class="skill-row">
+                                                            <div class="skill-head">
+                                                                <span class="skill-tag">{format!("#{}", tag)}</span>
+                                                                <span class="skill-lvl">{format!("lvl {}", lvl)}</span>
+                                                                <span class="skill-uses dim">{format!("{} notes", uses)}</span>
+                                                            </div>
+                                                            <div class="skill-bar">
+                                                                <div class="skill-fill"
+                                                                     style:width=format!("{:.0}%", bar_pct)></div>
+                                                            </div>
+                                                            {(!preview.is_empty()).then(|| view! {
+                                                                <div class="skill-preview dim">{preview}</div>
+                                                            })}
+                                                        </li>
+                                                    }
+                                                }).collect_view()}
+                                            </ul>
+                                        }.into_any()
+                                    }}
+                                </section>
+                            </div>
+                        </div>
+                    }.into_any()
+                }
 
                 View::Board => {
                     let load_again = load_board_posts.clone();

@@ -42,6 +42,7 @@ pub enum EdgeKind {
     Tag,
     Similarity,
     Manual,
+    Auto,
 }
 
 impl EdgeKind {
@@ -51,6 +52,7 @@ impl EdgeKind {
             EdgeKind::Tag => "tag",
             EdgeKind::Similarity => "similarity",
             EdgeKind::Manual => "manual",
+            EdgeKind::Auto => "auto",
         }
     }
 }
@@ -68,6 +70,7 @@ pub struct GraphConfig {
     pub include_tags: bool,
     pub include_similarity: bool,
     pub include_manual: bool,
+    pub include_auto: bool,
     pub show_thumbnails: bool,
 }
 
@@ -79,6 +82,7 @@ impl Default for GraphConfig {
             include_tags: true,
             include_similarity: true,
             include_manual: true,
+            include_auto: true,
             show_thumbnails: true,
         }
     }

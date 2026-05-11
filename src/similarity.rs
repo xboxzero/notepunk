@@ -94,6 +94,25 @@ pub fn extract_tags(body: &str) -> Vec<String> {
     out
 }
 
+pub fn count_images(body: &str) -> u32 {
+    let bytes = body.as_bytes();
+    let mut count = 0u32;
+    let mut i = 0;
+    while i + 4 < bytes.len() {
+        if bytes[i] == b'!' && bytes[i + 1] == b'[' {
+            if let Some(close) = body[i + 2..].find("](") {
+                if body[i + 2 + close + 2..].find(')').is_some() {
+                    count += 1;
+                    i += 2 + close + 2;
+                    continue;
+                }
+            }
+        }
+        i += 1;
+    }
+    count
+}
+
 pub fn extract_first_image(body: &str) -> Option<String> {
     let bytes = body.as_bytes();
     let mut i = 0;

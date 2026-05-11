@@ -218,17 +218,68 @@ function _edgeColor(kind) {
         case 'tag':        return '#2a4d8f';
         case 'similarity': return '#7a6f5c';
         case 'manual':     return '#1a1612';
+        case 'auto':       return '#c89b1a';
         default:           return '#1a1612';
     }
 }
 
-function _nodeColor(degree, recency, maxDegree) {
+function _edgeDash(kind) {
+    switch (kind) {
+        case 'tag':        return [2, 2];
+        case 'similarity': return [1, 3];
+        case 'auto':       return [4, 4];
+        default:           return null;
+    }
+}
+
+function _nodeColor(degree, recency, maxDegree, skillLevel) {
     const d = maxDegree > 0 ? Math.min(1, degree / maxDegree) : 0;
     const heat = 0.35 * recency + 0.65 * d;
-    const r = Math.round(244 + (184 - 244) * heat);
-    const g = Math.round(234 + (68  - 234) * heat);
-    const b = Math.round(213 + (42  - 213) * heat);
-    return 'rgb(' + r + ',' + g + ',' + b + ')';
+    let r = 244 + (184 - 244) * heat;
+    let g = 234 + (68  - 234) * heat;
+    let b = 213 + (42  - 213) * heat;
+    if (skillLevel && skillLevel > 0) {
+        const k = Math.min(1, skillLevel / 12);
+        r = r + (230 - r) * k;
+        g = g + (180 - g) * k;
+        b = b + (40  - b) * k;
+    }
+    return 'rgb(' + Math.round(r) + ',' + Math.round(g) + ',' + Math.round(b) + ')';
+}
+
+export function sfxPlay(name) {
+    try {
+        if (window._notepunkMuted) return;
+        const ctx = _ensureCtx();
+        const now = ctx.currentTime;
+        const presets = {
+            xp:     [[880, 0.05, 'square'], [1320, 0.08, 'square']],
+            level:  [[523, 0.07, 'square'], [659, 0.07, 'square'], [784, 0.07, 'square'], [1047, 0.18, 'square']],
+            quest:  [[659, 0.06, 'triangle'], [784, 0.06, 'triangle'], [988, 0.12, 'triangle']],
+            gold:   [[1568, 0.04, 'square'], [2093, 0.06, 'square']],
+            tap:    [[440, 0.03, 'square']],
+            err:    [[220, 0.12, 'sawtooth'], [165, 0.16, 'sawtooth']],
+        };
+        const seq = presets[name] || presets.xp;
+        let t = now;
+        for (const [freq, dur, type] of seq) {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = type;
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.06, t + 0.005);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+            osc.connect(gain).connect(ctx.destination);
+            osc.start(t);
+            osc.stop(t + dur + 0.02);
+            t += dur;
+        }
+    } catch (_) {}
+}
+
+export function sfxMute(muted) {
+    window._notepunkMuted = !!muted;
 }
 
 export function render3DGraph(containerId, nodesJson, edgesJson, onNodeTap, onEdgeTap, linkMode) {
@@ -247,22 +298,38 @@ export function render3DGraph(containerId, nodesJson, edgesJson, onNodeTap, onEd
     let maxDegree = 0;
     for (const n of rawNodes) if (n.degree > maxDegree) maxDegree = n.degree;
 
-    const nodes = rawNodes.map(n => ({
-        id: n.id,
-        label: n.label,
-        degree: n.degree,
-        color: _nodeColor(n.degree, n.recency, maxDegree),
-        val: 1 + Math.min(8, n.degree),
-    }));
-    const links = rawEdges.map(e => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        kind: e.kind,
-        weight: e.weight,
-        color: _edgeColor(e.kind),
-        width: e.kind === 'similarity' ? Math.max(0.4, e.weight * 3) : (e.kind === 'tag' ? 1 + e.weight * 2 : 1.5),
-    }));
+    const nodes = rawNodes.map(n => {
+        const sl = n.skill_level || 0;
+        const baseVal = 1 + Math.min(8, n.degree) + sl * 0.5;
+        const labelParts = [n.label || 'untitled'];
+        if (n.top_tag) labelParts.push('#' + n.top_tag);
+        if (sl > 0) labelParts.push('lvl ' + sl);
+        return {
+            id: n.id,
+            label: labelParts.join(' · '),
+            degree: n.degree,
+            color: _nodeColor(n.degree, n.recency, maxDegree, sl),
+            val: baseVal,
+            skill_level: sl,
+        };
+    });
+    const links = rawEdges.map(e => {
+        let width;
+        if (e.kind === 'similarity') width = Math.max(0.4, e.weight * 3);
+        else if (e.kind === 'tag') width = 1 + e.weight * 2;
+        else if (e.kind === 'auto') width = 0.6;
+        else width = 1.5;
+        return {
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            kind: e.kind,
+            weight: e.weight,
+            color: _edgeColor(e.kind),
+            width,
+            dash: _edgeDash(e.kind),
+        };
+    });
 
     _currentLinkMode = !!linkMode;
 
@@ -279,8 +346,9 @@ export function render3DGraph(containerId, nodesJson, edgesJson, onNodeTap, onEd
         .nodeVal('val')
         .nodeOpacity(0.95)
         .linkColor(l => l.color)
-        .linkOpacity(0.7)
+        .linkOpacity(l => l.kind === 'auto' ? 0.35 : 0.7)
         .linkWidth(l => l.width)
+        .linkLineDash(l => l.dash)
         .linkDirectionalArrowLength(l => l.kind === 'wikilink' ? 3 : 0)
         .linkDirectionalArrowRelPos(0.95)
         .linkDirectionalArrowColor(l => l.color)
@@ -365,6 +433,12 @@ extern "C" {
 
     #[wasm_bindgen(js_name = audioDelete)]
     pub async fn audio_delete(track_id: &str) -> JsValue;
+
+    #[wasm_bindgen(js_name = sfxPlay)]
+    pub fn sfx_play(name: &str);
+
+    #[wasm_bindgen(js_name = sfxMute)]
+    pub fn sfx_mute(muted: bool);
 }
 
 pub fn js_field(v: &JsValue, key: &str) -> Option<JsValue> {
